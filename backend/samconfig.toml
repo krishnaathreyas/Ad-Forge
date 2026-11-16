@@ -4,6 +4,7 @@ version = 0.1
 
 [default.global.parameters]
 stack_name = "backend"
+region = "ap-south-1"
 
 [default.build.parameters]
 cached = true
@@ -16,10 +17,12 @@ lint = true
 capabilities = "CAPABILITY_IAM"
 confirm_changeset = true
 resolve_s3 = true
-s3_prefix = "backend-dev"
+s3_prefix = "adforge-academia"
 region = "ap-south-1"
 image_repositories = []
-stack_name = "backend-dev"
+stack_name = "adforge-academia"
+profile = "adforge-new"
+disable_rollback = true
 
 [default.package.parameters]
 resolve_s3 = true

@@ -71,7 +71,7 @@ Resources:
         Variables:
           JOBS_TABLE_NAME: !Ref JobsTable
           CLIP_CACHE_TABLE_NAME: !Ref ClipCacheTable 
-          PRODUCT_DB_BUCKET: "ad-forge-database-amg-2025"
+          PRODUCT_DB_BUCKET: "adforge"
           # --- CORRECTED KEYS for Hugging Face Workflow ---
           OPENROUTER_API_KEY_PARAM: /ad-forge/openrouter-api-key
           HF_TOKEN_PARAM: /ad-forge/hf-token
@@ -79,9 +79,9 @@ Resources:
           SHOTSTACK_API_KEY_PARAM: /ad-forge/shotstack-api-key
       Policies:
         - S3ReadPolicy:
-            BucketName: "ad-forge-database-amg-2025"
+            BucketName: "adforge"
         - S3WritePolicy:
-            BucketName: "ad-forge-database-amg-2025"
+            BucketName: "adforge"
         - DynamoDBCrudPolicy:
             TableName: !Ref JobsTable
         - DynamoDBCrudPolicy: 
