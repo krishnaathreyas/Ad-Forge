@@ -1,5 +1,5 @@
 class Product {
-  final String id; // This will be used as the SKU
+  final String id; // This will be used as the SKU / QR identifier
   final String name;
   final String brand;
   final String category;
@@ -7,6 +7,7 @@ class Product {
   final List<String> features;
   final String imageUrl;
   final double price;
+  final String? adUrl; // Pre-uploaded advertisement video URL
 
   Product({
     required this.id,
@@ -17,9 +18,9 @@ class Product {
     required this.features,
     required this.imageUrl,
     required this.price,
+    this.adUrl,
   });
 
-  // This factory constructor remains the same, it's for parsing JSON if needed
   factory Product.fromJson(Map<String, dynamic> json) {
     return Product(
       id: json['id'] ?? '',
@@ -30,14 +31,16 @@ class Product {
       features: List<String>.from(json['features'] ?? []),
       imageUrl: json['imageUrl'] ?? '',
       price: (json['price'] ?? 0).toDouble(),
+      adUrl: json['adUrl'],
     );
   }
 
-  // --- THIS IS THE UPDATED PART ---
-  // The sample products now use the exact SKUs from your backend database
+  /// Centralized product-to-video mapping.
+  /// QR identifiers → S3 ad video URLs.
+  /// To add a new product, simply add a new entry here.
   static List<Product> get sampleProducts => [
         Product(
-          id: 'PROD-S24ULTRA', // Correct SKU from your DB
+          id: 'PROD-S24ULTRA',
           name: 'Galaxy S24 Ultra',
           brand: 'Samsung',
           category: 'Smartphone',
@@ -49,9 +52,10 @@ class Product {
           ],
           imageUrl: '',
           price: 1299.99,
+          adUrl: 'https://adforge.s3.ap-south-1.amazonaws.com/ads/s24.mp4',
         ),
         Product(
-          id: 'PROD-WW12T504DAB', // Correct SKU from your DB
+          id: 'PROD-WW12T504DAB',
           name: 'Bespoke AI™ EcoBubble™ Washer',
           brand: 'Samsung',
           category: 'Home Appliance',
@@ -63,9 +67,10 @@ class Product {
           ],
           imageUrl: '',
           price: 899.99,
+          adUrl: 'https://adforge.s3.ap-south-1.amazonaws.com/ads/wm.mp4',
         ),
         Product(
-          id: 'PROD-QN900D-TV', // Correct SKU from your DB
+          id: 'PROD-QN900D-TV',
           name: 'Samsung Neo QLED 8K TV',
           brand: 'Samsung',
           category: 'Television',
@@ -78,8 +83,18 @@ class Product {
           ],
           imageUrl: '',
           price: 4999.99,
+          adUrl: 'https://adforge.s3.ap-south-1.amazonaws.com/ads/tv.mp4',
         ),
       ];
+
+  /// Look up a product by its QR identifier. Returns null if not found.
+  static Product? findByQrId(String qrId) {
+    try {
+      return sampleProducts.firstWhere((p) => p.id == qrId);
+    } catch (_) {
+      return null;
+    }
+  }
 }
 
 class AdResult {

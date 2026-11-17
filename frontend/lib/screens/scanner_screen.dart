@@ -27,21 +27,28 @@ class _ScannerScreenState extends State<ScannerScreen> {
 
     print("✅ QR Code Scanned. Raw Value: $barcodeValue");
 
-    // THE FIX IS HERE: Find the product in our list that matches the scanned code.
-    // .firstWhere is used to find the first item in a list that satisfies a condition.
-    // orElse is a fallback in case the QR code is not in our sample list.
-    final product = Product.sampleProducts.firstWhere(
-      (p) => p.id == barcodeValue,
-      orElse: () {
-        print(
-            "⚠️ Scanned QR code not in sample list, using first product as fallback.");
-        return Product.sampleProducts.first;
-      },
-    );
+    // Look up product by exact QR identifier — no fallback
+    final product = Product.findByQrId(barcodeValue);
 
-    print("✅ Using Product SKU: ${product.id} for the API call.");
+    if (product == null) {
+      print("❌ Unknown QR code: $barcodeValue");
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Unknown product: $barcodeValue'),
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 3),
+          ),
+        );
+        setState(() => _isProcessing = false);
+      }
+      return;
+    }
 
-    // Use the provider to set the product
+    print("✅ Matched Product: ${product.name} (${product.id})");
+
+    // Set the product — AppProvider.setScannedProduct will auto-route
+    // to ad playback if adUrl exists, or context screen otherwise
     await context.read<AppProvider>().setScannedProduct(product);
 
     if (mounted) {

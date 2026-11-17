@@ -70,6 +70,30 @@ class ApiService {
     }
   }
 
+  /// Fetches a presigned S3 URL for a product's pre-uploaded advertisement.
+  /// Returns the presigned video URL, or null if the product has no ad.
+  static Future<String?> getAdVideoUrl({required String productId}) async {
+    final Uri adUrl = Uri.parse('$_baseUrl/products/$productId/advertisement');
+    try {
+      print("🎬 GET /products/$productId/advertisement");
+      final response = await http.get(adUrl);
+
+      if (response.statusCode == 200) {
+        final responseData = json.decode(response.body);
+        final videoUrl = responseData['videoUrl'] as String?;
+        print("✅ Ad video URL received for $productId");
+        return videoUrl;
+      } else {
+        print(
+            "❌ No ad available: ${response.statusCode} - ${response.body}");
+        return null;
+      }
+    } catch (e) {
+      print("❌ Network error fetching ad video URL: $e");
+      return null;
+    }
+  }
+
   /// Calls the /status/{jobId} endpoint to check the job's progress.
   static Future<Map<String, dynamic>?> checkJobStatus(
       {required String jobId}) async {

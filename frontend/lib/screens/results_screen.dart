@@ -175,7 +175,13 @@ class _ResultsScreenState extends State<ResultsScreen> {
   }
 
   String _getAppBarTitle(AppProvider provider) {
-    if (provider.isGenerating) return 'Generating Your Ad...';
+    if (provider.isGenerating) {
+      // Check if it's loading a pre-uploaded ad vs AI generation
+      if (provider.generationStatus == 'Loading advertisement...') {
+        return 'Loading Ad...';
+      }
+      return 'Generating Your Ad...';
+    }
     if (provider.error != null) return 'Generation Failed';
     if (provider.generatedVideoUrl != null) return 'Ad Ready!';
     return 'Results';
@@ -240,17 +246,26 @@ class _ResultsScreenState extends State<ResultsScreen> {
   //   );
   // }
   Widget _buildProcessingUI(AppProvider provider) {
+    // Use real progress for pre-loaded ad anticipation, fixed value for AI generation
+    final bool isAdAnticipation = provider.scannedProduct?.adUrl != null;
+    final double displayProgress = isAdAnticipation ? provider.adProgress : 0.2;
+    final String title = isAdAnticipation
+        ? "Loading your advertisement..."
+        : "Forging your masterpiece...";
+    final String subtitle = isAdAnticipation
+        ? "Get ready to watch!"
+        : "This may take a few moments. Please keep the app open.";
+
     return Column(
       mainAxisAlignment: MainAxisAlignment.center,
       crossAxisAlignment: CrossAxisAlignment.center,
       children: [
         SizedBox(height: MediaQuery.of(context).size.height * 0.15),
-        // Use the dynamic progress value from the provider
-        InteractiveLoadingWidget(progress: 0.2),
+        InteractiveLoadingWidget(progress: displayProgress),
         const SizedBox(height: 40),
-        const Text(
-          "Forging your masterpiece...",
-          style: TextStyle(
+        Text(
+          title,
+          style: const TextStyle(
               color: Colors.white, fontSize: 22, fontWeight: FontWeight.bold),
           textAlign: TextAlign.center,
         ),
@@ -262,7 +277,7 @@ class _ResultsScreenState extends State<ResultsScreen> {
         ),
         const SizedBox(height: 15),
         Text(
-          "This may take a few moments. Please keep the app open.",
+          subtitle,
           style: TextStyle(color: Colors.grey.shade600, fontSize: 14),
           textAlign: TextAlign.center,
         ),
@@ -309,6 +324,9 @@ class _ResultsScreenState extends State<ResultsScreen> {
   }
 
   Widget _buildVideoPlayerUI() {
+    final provider = context.watch<AppProvider>();
+    final isPreloadedAd = provider.scannedProduct?.adUrl != null;
+
     return Column(
       children: [
         FutureBuilder(
@@ -351,6 +369,28 @@ class _ResultsScreenState extends State<ResultsScreen> {
                   ),
                 ),
               );
+            } else if (snapshot.hasError) {
+              return AspectRatio(
+                aspectRatio: 16 / 9,
+                child: Container(
+                  decoration: BoxDecoration(
+                      color: Colors.black,
+                      borderRadius: BorderRadius.circular(12)),
+                  child: Center(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(Icons.error_outline, color: Colors.red, size: 40),
+                        const SizedBox(height: 10),
+                        Text(
+                          'Failed to load video',
+                          style: TextStyle(color: Colors.grey.shade400),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              );
             } else {
               return AspectRatio(
                 aspectRatio: 16 / 9,
@@ -372,15 +412,19 @@ class _ResultsScreenState extends State<ResultsScreen> {
             color: const Color(0xFF1F1F3A),
             borderRadius: BorderRadius.circular(12),
           ),
-          child: const Row(
+          child: Row(
             children: [
-              Icon(Icons.check_circle, color: Colors.green, size: 24),
-              SizedBox(width: 12),
-              Text('Ad Generation Complete!',
-                  style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600,
-                      color: Colors.white)),
+              const Icon(Icons.check_circle, color: Colors.green, size: 24),
+              const SizedBox(width: 12),
+              Text(
+                isPreloadedAd
+                    ? '${provider.scannedProduct?.name ?? "Product"} Advertisement'
+                    : 'Ad Generation Complete!',
+                style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.white),
+              ),
             ],
           ),
         ),
