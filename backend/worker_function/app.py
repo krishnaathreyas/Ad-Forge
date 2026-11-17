@@ -9,6 +9,8 @@ from threading import Thread
 import hashlib
 from decimal import Decimal
 
+VOICE_ID = "2zRM7PkgwBPiau2jvVXc"
+
 # Initialize AWS clients
 s3 = boto3.client("s3")
 ssm = boto3.client("ssm")
@@ -49,12 +51,6 @@ def generate_ad_blueprint(product_data, user_context, api_key, language_preferen
     print(f"Generating multilingual ad blueprint for language: {language_preference}...")
 
     # This is your curated library of voice actors using the IDs you provided.
-    voice_options = {
-        "professional_male_voice_1": "wlmwDR77ptH6bKHZui0l",
-        "professional_female_voice_1": "wlmwDR77ptH6bKHZui0l",
-        "professional_female_voice_2": "2zRM7PkgwBPiau2jvVXc", 
-    }
-
     language_examples = {
         "Kannada": "ಈಗ ನಿಮ್ಮ ನೆಚ್ಚಿನ ಧಾರಾವಾಹಿಯನ್ನು ಸ್ಯಾಮ್ಸಂಗ್ ಟಿವಿಯಲ್ಲಿ ನೋಡಿ.",
         "Hindi": "अब, अपने पसंदीदा शो का आनंद सैमसंग टीवी पर लें।",
@@ -71,25 +67,24 @@ def generate_ad_blueprint(product_data, user_context, api_key, language_preferen
     Your primary goal is to generate a blueprint with visual prompts that are safe and will not be flagged by downstream AI content filters.
 
     Your task is to generate a complete creative blueprint as a single, valid JSON object.
-    The blueprint must have three keys:
-    1. "acts": An array of 3 vivid, visual prompts for a text-to-video AI model. 
+    The object must contain exactly these fields:
+    - "acts": an array of exactly 3 vivid visual prompts for a text-to-video model.
        ## IMPORTANT CONSTRAINT ##
        These prompts must be carefully written to avoid content policy violations. 
        - Use neutral, descriptive language.
        - AVOID words related to impact, drama, or conflict (e.g., "shot", "dramatic", "tension", "hit").
        - INSTEAD, use safer synonyms (e.g., "a view of", "a scene showing", "an exciting moment", "connecting with the ball").
        - Focus on the product, scenery, and positive emotions.
-    2. "Determine Language": The user's language preference is "{language_preference}".
-    3. "voiceover_script": A cohesive voiceover script in the determined language, timed to last approximately 17-18 seconds., that is timed to last approximately 22-23 seconds, ensuring it ends naturally before the final branding shot.
+    - "voiceover_script": a cohesive script in {language_preference}, timed for approximately 17-18 seconds.
         - The script MUST use the native script (e.g., Kannada script, Hindi script).
         - THE Script  must include all the UPSTRESS  and DOWNSTRESS.
         - The language MUST be natural and conversational.
         - **Follow this style example:** '{style_example}'
-    4. "voice_id": Based on the user's context, select the SINGLE MOST appropriate voice for the ad's tone from the 'Available Voice IDs' and return its corresponding unique ID string (the value), not its descriptive name (the key).
+    - "voice_id": Always return this exact ElevenLabs voice ID: "{VOICE_ID}".
 
     Product Name: {product_data.get('productName')}
     User Context: {user_context}
-    Available Voice IDs: {json.dumps(voice_options)}
+    Allowed Voice ID: {VOICE_ID}
 
     Your output MUST be a single, valid JSON object. Do not add any explanation.
     """
@@ -103,9 +98,30 @@ def generate_ad_blueprint(product_data, user_context, api_key, language_preferen
     }
 
     payload = {
-        "model": "google/gemini-flash-1.5",
+        "model": "nvidia/nemotron-3-ultra-550b-a55b:free",
         "messages": [{"role": "user", "content": prompt}],
-        "response_format": {"type": "json_object"},  # Ask for JSON output
+        "response_format": {
+            "type": "json_schema",
+            "json_schema": {
+                "name": "ad_blueprint",
+                "strict": True,
+                "schema": {
+                    "type": "object",
+                    "properties": {
+                        "acts": {
+                            "type": "array",
+                            "items": {"type": "string"},
+                            "minItems": 3,
+                            "maxItems": 3,
+                        },
+                        "voiceover_script": {"type": "string"},
+                        "voice_id": {"type": "string"},
+                    },
+                    "required": ["acts", "voiceover_script", "voice_id"],
+                    "additionalProperties": False,
+                },
+            },
+        },
     }
 
     response = requests.post(
@@ -116,9 +132,59 @@ def generate_ad_blueprint(product_data, user_context, api_key, language_preferen
         print(f"Error from LLM API: {response.text}")
     response.raise_for_status()
 
-    # Parse the JSON string from the response
+    # Normalize model output before the downstream video and voice stages consume it.
     blueprint_str = response.json()["choices"][0]["message"]["content"]
-    return json.loads(blueprint_str)
+    blueprint = json.loads(blueprint_str)
+    print(f"Blueprint keys returned by model: {list(blueprint.keys())}")
+
+    acts = (
+        blueprint.get("acts")
+        or blueprint.get("scenes")
+        or blueprint.get("visual_prompts")
+        or blueprint.get("video_prompts")
+    )
+    if not blueprint:
+        product_name = product_data.get("productName", "the product")
+        acts = [
+            f"A polished product showcase of {product_name}, clean studio lighting, premium commercial style.",
+            f"A lifestyle scene featuring {product_name} in use, warm festive lighting, natural movement, premium commercial style.",
+            f"A close product detail of {product_name}, elegant composition, crisp highlights, premium commercial style.",
+        ]
+        blueprint = {
+            "acts": acts,
+            "voiceover_script": (
+                f"Discover {product_name}. Designed for the moments that matter, "
+                "with innovation, style, and performance made for you."
+            ),
+        }
+        print("Nemotron returned an empty blueprint; using deterministic fallback.")
+        acts = blueprint["acts"]
+    if isinstance(acts, dict):
+        acts = list(acts.values())
+    if not isinstance(acts, list):
+        list_values = [value for value in blueprint.values() if isinstance(value, list)]
+        if list_values:
+            acts = list_values[0]
+    if not isinstance(acts, list) or not acts:
+        raise ValueError(
+            f"Blueprint response missing video scenes; returned keys: {list(blueprint.keys())}"
+        )
+    while len(acts) < 3:
+        acts.append(acts[-1])
+
+    voiceover_script = (
+        blueprint.get("voiceover_script")
+        or blueprint.get("voiceover")
+        or blueprint.get("narration")
+    )
+    if not isinstance(voiceover_script, str) or not voiceover_script.strip():
+        raise ValueError("Blueprint response missing voiceover_script")
+
+    normalized = dict(blueprint)
+    normalized["acts"] = acts[:3]
+    normalized["voiceover_script"] = voiceover_script
+    normalized["voice_id"] = VOICE_ID
+    return normalized
 
 
 def generate_voiceover(script, voice_id, api_key, bucket_name):
@@ -195,7 +261,7 @@ def generate_video_clip(prompt, hf_client_video, results_list, index, bucket_nam
         print(f"CACHE MISS for prompt: {prompt[:30]}... Generating new clip.")
         video_bytes = hf_client_video.text_to_video(
             prompt,
-            model="Wan-AI/Wan2.2-T2V-A14B",
+            model="Wan-AI/Wan2.2-TI2V-5B",
         )
 
         clip_key = f"cached_clips/{prompt_hash}.mp4"
@@ -286,14 +352,14 @@ def generate_final_video(clips, voiceover_url, music_url, api_key):
     raise Exception("Video rendering timed out.")
 
 
-"""def lambda_handler(event, context):
-    
+def lambda_handler(event, context):
+    """
     The main handler for the long-running worker function.
 
     This function is triggered asynchronously by the ForgeFunction. It fetches job
     details from DynamoDB, runs the full generative AI pipeline, and updates
     DynamoDB with the final result or an error message.
-    
+    """
 
     job_id = ""
     try:
@@ -323,7 +389,7 @@ def generate_final_video(clips, voiceover_url, music_url, api_key):
         sku = request_body.get("sku")
         user_context = request_body.get("user_context")
         language_preference = request_body.get('language', 'English')
-        bucket_name = "ad-forge-database-amg-2025"
+        bucket_name = "adforge"
 
         # -- 2. GET DATA & BLUEPRINT --
         db_object = s3.get_object(Bucket=bucket_name, Key="product_db.json")
@@ -392,11 +458,20 @@ def generate_final_video(clips, voiceover_url, music_url, api_key):
 
         # -- 5. ASSEMBLE THE FINAL VIDEO --
         print("Assembling final video with Shotstack...")
-        product_shot_urls=[]
-        for s3_uri in product_data['product_shot_url']:
+        product_shot_urls = []
+        product_shot_sources = product_data['product_shot_url']
+        if isinstance(product_shot_sources, str):
+            product_shot_sources = [product_shot_sources]
+
+        for s3_uri in product_shot_sources:
             bucket = s3_uri.split('/')[2]
             key = '/'.join(s3_uri.split('/')[3:])
             product_shot_urls.append(s3.generate_presigned_url('get_object', Params={'Bucket': bucket, 'Key': key}, ExpiresIn=600))
+
+        if not product_shot_urls:
+            raise Exception(f"Product SKU '{sku}' has no product footage.")
+
+        secondary_product_shot_url = product_shot_urls[min(1, len(product_shot_urls) - 1)]
 
         samsung_logo_key = (
             "curated_clips/samsung_name.mp4"  # Assuming it's in this folder
@@ -432,7 +507,7 @@ def generate_final_video(clips, voiceover_url, music_url, api_key):
                 "length": 5,
             },
             {
-                "asset": {"type": "video", "src": product_shot_urls[1], "volume": 0},
+                "asset": {"type": "video", "src": secondary_product_shot_url, "volume": 0},
                 "start": 14,
                 "length": 5,
             },
@@ -475,9 +550,9 @@ def generate_final_video(clips, voiceover_url, music_url, api_key):
             UpdateExpression="SET #s = :status, errorMessage = :error",
             ExpressionAttributeNames={"#s": "status"},
             ExpressionAttributeValues={":status": "FAILED", ":error": str(e)},
-        )"""
+        )
     
-def lambda_handler(event, context):
+def audio_test_lambda_handler(event, context):
     """
     TEMPORARY WORKER for testing blueprint and dynamic audio.
     It generates the blueprint and the voiceover, then stops.

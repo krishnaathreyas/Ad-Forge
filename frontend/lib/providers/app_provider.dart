@@ -150,7 +150,8 @@ class AppProvider with ChangeNotifier {
           print("Final Video URL: $_generatedVideoUrl");
         } else if (status == 'FAILED') {
           _generationStatus = "Video generation failed.";
-          _error = "The backend process failed during generation.";
+          _error = statusResult['errorMessage'] ??
+              "The backend process failed during generation.";
           _isGenerating = false;
           timer.cancel();
         } else {

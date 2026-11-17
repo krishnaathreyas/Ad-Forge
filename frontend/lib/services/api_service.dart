@@ -1,12 +1,10 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import '../models/product.dart';
-import 'dart:convert';
-import 'package:http/http.dart' as http;
 
 class ApiService {
   static const String _baseUrl =
-      'https://7i5316q6o2.execute-api.ap-south-1.amazonaws.com/Prod/';
+      'https://8lztw24k39.execute-api.ap-south-1.amazonaws.com/Prod';
 
   // Add this method to your existing ApiService class
   static Future<Map<String, dynamic>> generateAd({

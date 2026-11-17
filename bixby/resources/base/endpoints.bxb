@@ -1,8 +1,0 @@
-endpoints {
-  action-endpoints {
-    action-endpoint (CreateAdForgeAd) {
-      accepted-inputs (product, marketingContext)
-      local-endpoint (CreateAdForgeAd.js)
-    }
-  }
-}
